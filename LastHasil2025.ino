@@ -160,94 +160,86 @@ void display_sensor() {
   // lcd.print("   ");
 }
 
-bool boost_speed = true;
-// 1= sensor paling kiri(sensor 1) untuk hitung garis, 2 = sensor paling kiri dan kanan (sensor 1 dan 8), 3 = sensor paling kanan (sensor 8)
-byte mode_counter = 2;
-
-// Tambahkan di luar fungsi (global)
-bool is_cross_detected = false;
-unsigned long last_cross_time = 0;
-const unsigned long cross_debounce_time = 1000; // waktu tunggu agar tidak double (dalam ms)
-
 void line_follower(int speed) {
-  display_sensor();
-  Serial.println("LF Mode");
+  // Fungsi pengikut garis dengan parameter kecepatan
+  display_sensor(); // Menampilkan data sensor pada LCD
+  Serial.println("LF Mode"); // Menampilkan mode pada Serial Monitor
 
+  // Meningkatkan kecepatan jika boost aktif
   if (boost_speed == true) {
-    speed += 20;
+    speed += 20; // Menambah kecepatan sebesar 20 jika boost aktif
   }
 
-  // === Navigasi dasar ===
-  if ((analogRead(s1_pin) > treshold || analogRead(s2_pin) > treshold || analogRead(s3_pin) > treshold || analogRead(s4_pin) > treshold) &&
-      analogRead(s5_pin) < treshold && analogRead(s6_pin) < treshold && analogRead(s7_pin) < treshold && analogRead(s8_pin) < treshold) {
-    turn_left(speed);
-  } else if (analogRead(s1_pin) < treshold && analogRead(s2_pin) < treshold && analogRead(s3_pin) < treshold && analogRead(s4_pin) < treshold &&
-             (analogRead(s5_pin) > treshold || analogRead(s6_pin) > treshold || analogRead(s7_pin) > treshold || analogRead(s8_pin) > treshold)) {
-    turn_right(speed);
+  // === Navigasi dasar untuk mengikuti garis ===
+  if ((analogRead(s1_pin) > treshold || analogRead(s2_pin) > treshold ||
+       analogRead(s3_pin) > treshold || analogRead(s4_pin) > treshold) &&
+      analogRead(s5_pin) < treshold && analogRead(s6_pin) < treshold &&
+      analogRead(s7_pin) < treshold && analogRead(s8_pin) < treshold) {
+    // Logika: Jika setidaknya satu sensor kiri (S1-S4) mendeteksi garis (OR) DAN
+    // semua sensor kanan (S5-S8) tidak mendeteksi garis (AND), maka belok kiri
+    turn_left(speed); // Belok kiri jika sensor kiri mendeteksi garis
+  } else if (analogRead(s1_pin) < treshold && analogRead(s2_pin) < treshold &&
+             analogRead(s3_pin) < treshold && analogRead(s4_pin) < treshold &&
+             (analogRead(s5_pin) > treshold || analogRead(s6_pin) > treshold ||
+              analogRead(s7_pin) > treshold || analogRead(s8_pin) > treshold)) {
+    // Logika: Jika semua sensor kiri (S1-S4) tidak mendeteksi garis (AND) DAN
+    // setidaknya satu sensor kanan (S5-S8) mendeteksi garis (OR), maka belok kanan
+    turn_right(speed); // Belok kanan jika sensor kanan mendeteksi garis
   } else {
-    forward(speed, speed);
-    flag = 1;
+    forward(speed, speed); // Maju jika tidak ada deteksi kiri/kanan
+    flag = 1; // Menandai kondisi maju
   }
 
-  // === Deteksi Perempatan ===
-  bool all_black = 
-    analogRead(s1_pin) > treshold &&
-    analogRead(s2_pin) > treshold &&
-    analogRead(s3_pin) > treshold &&
-    analogRead(s4_pin) > treshold &&
-    analogRead(s5_pin) > treshold &&
-    analogRead(s6_pin) > treshold &&
-    analogRead(s7_pin) > treshold &&
-    analogRead(s8_pin) > treshold;
+  // === Deteksi Perempatan (semua sensor hitam) ===
+  bool all_black = analogRead(s1_pin) > treshold && analogRead(s2_pin) > treshold &&
+                  analogRead(s3_pin) > treshold && analogRead(s4_pin) > treshold &&
+                  analogRead(s5_pin) > treshold && analogRead(s6_pin) > treshold &&
+                  analogRead(s7_pin) > treshold && analogRead(s8_pin) > treshold;
+  // Logika: Jika semua sensor (S1-S8) mendeteksi garis (hitam), maka dianggap perempatan
 
   // === Deteksi Pertigaan KIRI ===
-  bool t_intersection_left =
-    analogRead(s1_pin) > treshold &&
-    analogRead(s2_pin) > treshold &&
-    analogRead(s3_pin) > treshold &&
-    analogRead(s4_pin) > treshold &&
-    analogRead(s5_pin) < treshold &&
-    analogRead(s6_pin) < treshold &&
-    analogRead(s7_pin) < treshold &&
-    analogRead(s8_pin) < treshold;
+  bool t_intersection_left = analogRead(s1_pin) > treshold && analogRead(s2_pin) > treshold &&
+                             analogRead(s3_pin) > treshold && analogRead(s4_pin) > treshold &&
+                             analogRead(s5_pin) < treshold && analogRead(s6_pin) < treshold &&
+                             analogRead(s7_pin) < treshold && analogRead(s8_pin) < treshold;
+  // Logika: Jika semua sensor kiri (S1-S4) mendeteksi garis (hitam) DAN
+  // semua sensor kanan (S5-S8) tidak mendeteksi garis, maka dianggap pertigaan kiri
 
   // === Deteksi Pertigaan KANAN ===
-  bool t_intersection_right =
-    analogRead(s1_pin) < treshold &&
-    analogRead(s2_pin) < treshold &&
-    analogRead(s3_pin) < treshold &&
-    analogRead(s4_pin) < treshold &&
-    analogRead(s5_pin) > treshold &&
-    analogRead(s6_pin) > treshold &&
-    analogRead(s7_pin) > treshold &&
-    analogRead(s8_pin) > treshold;
+  bool t_intersection_right = analogRead(s1_pin) < treshold && analogRead(s2_pin) < treshold &&
+                              analogRead(s3_pin) < treshold && analogRead(s4_pin) < treshold &&
+                              analogRead(s5_pin) > treshold && analogRead(s6_pin) > treshold &&
+                              analogRead(s7_pin) > treshold && analogRead(s8_pin) > treshold;
+  // Logika: Jika semua sensor kiri (S1-S4) tidak mendeteksi garis DAN
+  // semua sensor kanan (S5-S8) mendeteksi garis, maka dianggap pertigaan kanan
 
-  unsigned long current_time = millis();
+  unsigned long current_time = millis(); // Waktu saat ini untuk debounce
 
-  // === Tambah counter jika perempatan atau pertigaan terdeteksi
+  // Tambah counter jika perempatan atau pertigaan terdeteksi
   if ((all_black || t_intersection_left || t_intersection_right) &&
       !is_cross_detected && (current_time - last_cross_time > cross_debounce_time)) {
-    
-    counter_line++;
-    lcd.noBacklight();
-    forward(speed, speed);
-    delay(100);  // biar benar-benar lewat sedikit
-    lcd.backlight();
-    is_cross_detected = true;
-    last_cross_time = current_time;
+    counter_line++; // Menambah jumlah garis yang dilewati
+    lcd.noBacklight(); // Mematikan lampu LCD untuk efek visual
+    forward(speed, speed); // Maju sedikit
+    delay(100); // Jeda agar benar-benar lewat
+    lcd.backlight(); // Menghidupkan lampu kembali
+    is_cross_detected = true; // Menandai bahwa perempatan terdeteksi
+    last_cross_time = current_time; // Menyimpan waktu deteksi
   }
 
-  // === Reset status deteksi ===
+  // Reset status jika tidak ada lagi perempatan/pertigaan
   if (!all_black && !t_intersection_left && !t_intersection_right && is_cross_detected) {
     is_cross_detected = false;
   }
 
-  boost_speed = false;
+  boost_speed = false; // Reset boost speed setelah digunakan
 
+  // Menampilkan jumlah perempatan pada LCD
   lcd.setCursor(8, 1);
   lcd.print(counter_line);
   lcd.print(" ");
 }
+
 
 
 //SENSOR GARIS END ------------------------------------------------------------------------
